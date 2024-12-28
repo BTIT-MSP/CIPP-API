@@ -21,6 +21,7 @@ function Test-CIPPAuditLogRules {
         'SAS:ProcessAuth'
         'deviceAuth:ReprocessTls'
         'Consent:Set'
+        'Login:reprocess'
     )
 
     $TrustedIPTable = Get-CIPPTable -TableName 'trustedIps'
@@ -35,11 +36,19 @@ function Test-CIPPAuditLogRules {
         }
     }
     #write-warning 'Getting audit records from Graph API'
-    $SearchResults = Get-CippAuditLogSearchResults -TenantFilter $TenantFilter -QueryId $SearchId
-    $LogCount = ($SearchResults | Measure-Object).Count
-    $RunGuid = New-Guid
-    Write-Warning "Logs to process: $LogCount - RunGuid: $($RunGuid) - $($TenantFilter)"
-    $Results.TotalLogs = $LogCount
+    try {
+        $LogCount = Get-CippAuditLogSearchResults -TenantFilter $TenantFilter -QueryId $SearchId -CountOnly
+        $RunGuid = (New-Guid).Guid
+        Write-Warning "Logs to process: $LogCount - SearchId: $SearchId - RunGuid: $($RunGuid) - $($TenantFilter)"
+        $Results.TotalLogs = $LogCount
+        Write-Information "RunGuid: $RunGud - Collecting logs"
+        $SearchResults = Get-CippAuditLogSearchResults -TenantFilter $TenantFilter -QueryId $SearchId
+    } catch {
+        Write-Warning "Error getting audit logs: $($_.Exception.Message)"
+        Write-LogMessage -API 'Webhooks' -message "Error getting audit logs for search $($SearchId)" -LogData (Get-CippException -Exception $_) -sev Error -tenant $TenantFilter
+        throw $_
+    }
+
     if ($LogCount -gt 0) {
         $LocationTable = Get-CIPPTable -TableName 'knownlocationdb'
         $ProcessedData = foreach ($AuditRecord in $SearchResults) {
