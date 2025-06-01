@@ -23,6 +23,18 @@ function New-CippExtAlert {
                     New-HaloPSATicket -Title $Alert.AlertTitle -Description $Alert.AlertText -Client $mappedId
                 }
             }
+            'ConnectWise' {
+                If ($Configuration.ConnectWise.enabled) {
+                    $MappingFile = Get-CIPPAzDataTableEntity @MappingTable -Filter "PartitionKey eq 'ConnectWiseMapping'"
+                    $TenantId = (Get-Tenants | Where-Object defaultDomainName -EQ $Alert.TenantId).customerId
+                    Write-Host "TenantId: $TenantId"
+                    $MappedId = ($MappingFile | Where-Object { $_.RowKey -eq $TenantId }).IntegrationId
+                    Write-Host "MappedId: $MappedId"
+                    if (!$mappedId) { $MappedId = 1 }
+                    Write-Host "MappedId: $MappedId"
+                    New-ConnectWisePSATicket -Title $Alert.AlertTitle -Description $Alert.AlertText -Client $mappedId
+                }
+            }
             'Gradient' {
                 If ($Configuration.Gradient.enabled) {
                     New-GradientAlert -Title $Alert.AlertTitle -Description $Alert.AlertText -Client $Alert.TenantId

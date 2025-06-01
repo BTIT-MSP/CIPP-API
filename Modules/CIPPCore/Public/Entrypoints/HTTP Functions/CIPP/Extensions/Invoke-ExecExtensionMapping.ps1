@@ -21,6 +21,9 @@ Function Invoke-ExecExtensionMapping {
             'HaloPSA' {
                 $Result = Get-HaloMapping -CIPPMapping $Table
             }
+            'ConnectWise' {
+                $Result = Get-ConnectWiseMapping -CIPPMapping $Table
+            }
             'NinjaOne' {
                 $Result = Get-NinjaOneOrgMapping -CIPPMapping $Table
             }
@@ -57,6 +60,9 @@ Function Invoke-ExecExtensionMapping {
                 }
                 'HaloPSA' {
                     $Result = Set-HaloMapping -CIPPMapping $Table -APIName $APIName -Request $Request
+                }
+                'ConnectWise' {
+                    $Result = Set-ConnectWiseMapping -CIPPMapping $Table -APIName $APIName -Request $Request
                 }
                 'NinjaOne' {
                     $Result = Set-NinjaOneOrgMapping -CIPPMapping $Table -APIName $APIName -Request $Request
