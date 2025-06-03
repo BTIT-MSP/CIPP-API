@@ -71,9 +71,9 @@ function New-CIPPAlertTemplate {
         $ButtonText = 'Check Standards configuration'
     }
     if ($InputObject -eq 'autopilot') {
-        $DataHTML = ($Data.Devices | Select-Object serialNumber, hardwareHash, deviceName, model, manufacturer | ConvertTo-Html -Fragment | Out-String).Replace('<table>', ' <table class="table-modern">')
+        $DataHTML = ($Data.Devices | Select-Object serialNumber, hardwareHash, deviceName, model, manufacturer, status | ConvertTo-Html -Fragment | Out-String).Replace('<table>', ' <table class="table-modern">')
         $Title = "$($Data.TenantDisplayName) - New Autopilot Devices Added"
-        $IntroText = "<p>The following Windows Autopilot devices have been successfully added to tenant <strong>$($Data.TenantDisplayName)</strong> by user <strong>$($Data.Username)</strong>:</p>$DataHTML"
+        $IntroText = "<p>The following Windows Autopilot devices have been processed for tenant <strong>$($Data.TenantDisplayName)</strong> by user <strong>$($Data.Username)</strong>:</p>$DataHTML"
         $ButtonUrl = "$CIPPURL/endpoint/autopilot/add-device?customerId=$($Data.TenantId)"
         $ButtonText = 'Manage Autopilot Devices'
         $AfterButtonText = '<p>You can use the button above to view and manage the Autopilot devices for this tenant.</p>'
