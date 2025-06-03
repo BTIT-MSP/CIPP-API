@@ -53,6 +53,85 @@ Function Invoke-AddAPDevice {
         if ($NewStatus.status -ne 'finished') { throw 'Could not retrieve status of import - This job might still be running. Check the autopilot device list in 10 minutes for the latest status.' }
         Write-LogMessage -headers $Request.Headers -API $APIName -tenant $($Request.body.TenantFilter.value) -message "Created Autopilot devices group. Group ID is $GroupName" -Sev 'Info'
 
+        # Send alert notification for successful Autopilot device addition
+        try {
+            $TenantInfo = Get-Tenants -TenantFilter $Request.body.TenantFilter.value | Select-Object -First 1
+            $SuccessfulDevices = @($NewStatus.devicesStatus | Where-Object { $_.successfullyprocessed -eq $true })
+            
+            if ($SuccessfulDevices.Count -gt 0) {
+                # Extract username from headers (same logic as Write-LogMessage)
+                if ($Request.Headers.'x-ms-client-principal-idp' -eq 'azureStaticWebApps' -or !$Request.Headers.'x-ms-client-principal-idp') {
+                    $User = $Request.Headers.'x-ms-client-principal'
+                    $Username = ([System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($User)) | ConvertFrom-Json).userDetails
+                } elseif ($Request.Headers.'x-ms-client-principal-idp' -eq 'aad') {
+                    $Table = Get-CIPPTable -TableName 'ApiClients'
+                    $Client = Get-CIPPAzDataTableEntity @Table -Filter "RowKey eq '$($Request.Headers.'x-ms-client-principal-name')'"
+                    $Username = $Client.AppName ?? 'CIPP-API'
+                } else {
+                    $Username = 'Unknown User'
+                }
+
+                # Prepare alert data
+                $AlertData = @{
+                    TenantDisplayName = $TenantInfo.displayName
+                    TenantId = $TenantInfo.customerId
+                    Username = $Username
+                    Devices = $SuccessfulDevices | ForEach-Object {
+                        @{
+                            serialNumber = $_.serialNumber
+                            hardwareHash = $_.hardwareHash -replace '^(.{20}).*(.{20})$', '$1...$2'  # Truncate for security
+                            deviceName = $_.deviceName ?? 'Unknown'
+                            model = $_.model ?? 'Unknown'
+                            manufacturer = $_.manufacturer ?? 'Unknown'
+                        }
+                    }
+                }
+
+                # Create alert template
+                $HTMLContent = New-CIPPAlertTemplate -Data $AlertData -Format 'html' -InputObject 'autopilot' -CIPPURL $env:CIPPURL
+
+                # Send email alert to support@baytechnologies.tech
+                $EmailAlert = @{
+                    Type = 'email'
+                    Title = $HTMLContent.title
+                    HTMLContent = $HTMLContent.htmlcontent
+                    TenantFilter = $Request.body.TenantFilter.value
+                    APIName = $APIName
+                    Headers = $Request.Headers
+                }
+                
+                # Override the email configuration to send to support@baytechnologies.tech
+                $Table = Get-CIPPTable -TableName SchedulerConfig
+                $Filter = "RowKey eq 'CippNotifications' and PartitionKey eq 'CippNotifications'"
+                $Config = [pscustomobject](Get-CIPPAzDataTableEntity @Table -Filter $Filter)
+                $OriginalEmail = $Config.email
+                $Config.email = 'support@baytechnologies.tech'
+                Add-CIPPAzDataTableEntity @Table -Entity $Config -Force | Out-Null
+                
+                # Send the email alert
+                Send-CIPPAlert @EmailAlert
+
+                # Restore original email configuration
+                $Config.email = $OriginalEmail
+                Add-CIPPAzDataTableEntity @Table -Entity $Config -Force | Out-Null
+
+                # Also send PSA alert if configured
+                $PSAAlert = @{
+                    Type = 'psa'
+                    Title = $HTMLContent.title
+                    HTMLContent = $HTMLContent.htmlcontent
+                    TenantFilter = $Request.body.TenantFilter.value
+                    APIName = $APIName
+                    Headers = $Request.Headers
+                }
+                Send-CIPPAlert @PSAAlert
+                
+                Write-LogMessage -headers $Request.Headers -API $APIName -tenant $($Request.body.TenantFilter.value) -message "Sent Autopilot device addition alert for $($SuccessfulDevices.Count) device(s)" -Sev 'Info'
+            }
+        } catch {
+            Write-LogMessage -headers $Request.Headers -API $APIName -tenant $($Request.body.TenantFilter.value) -message "Failed to send Autopilot device addition alert: $($_.Exception.Message)" -Sev 'Warning'
+        }
+
         [PSCustomObject]@{
             Status  = 'Import Job Completed'
             Devices = @($NewStatus.devicesStatus)
