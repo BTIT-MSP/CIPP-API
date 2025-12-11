@@ -6,7 +6,7 @@ name: Build and deploy Powershell project to Azure Function App - cippcgrvg
 on:
   push:
     branches:
-      - interface-rewrite
+      - master
   workflow_dispatch:
 
 env:
@@ -14,12 +14,22 @@ env:
 
 jobs:
   deploy:
-    runs-on: windows-latest
-    
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write #This is required for requesting the JWT
+      contents: read #This is required for actions/checkout
+
     steps:
       - name: 'Checkout GitHub Action'
         uses: actions/checkout@v4
       
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_7ACF34A0317747B9B53A746DA98B9761 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_105D7837013F4D299899798F75310C28 }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_6F0DDA0A985F4C639A573E4C977C6197 }}
+
       - name: 'Run Azure Functions Action'
         uses: Azure/functions-action@v1
         id: fa
@@ -27,4 +37,4 @@ jobs:
           app-name: 'cippcgrvg'
           slot-name: 'Production'
           package: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_C87BF09F49D04E37B22ACC99583F2285 }}
+          
